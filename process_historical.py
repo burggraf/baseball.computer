@@ -67,19 +67,28 @@ def get_years_to_process():
 def download_year(year, temp_dir):
     """Download Retrosheet data for a specific year"""
     print(f"  Downloading {year} data...")
-    
+
     zip_file = temp_dir / f"{year}eve.zip"
-    
+
     # Download the zip file
     result = subprocess.run(
         ["curl", "-s", "-o", str(zip_file), f"{RETROSHEET_URL}/{year}eve.zip"],
         capture_output=True,
         text=True
     )
-    
-    if result.returncode != 0 or zip_file.stat().st_size < 1000:
-        raise Exception(f"Failed to download {year} data")
-    
+
+    # Check if file exists and has reasonable size
+    if not zip_file.exists() or zip_file.stat().st_size < 100:
+        raise Exception(f"Failed to download {year} data - file not found")
+
+    # Check if it's actually a zip file (check for zip magic number)
+    with open(zip_file, 'rb') as f:
+        header = f.read(4)
+        if header != b'PK\x03\x04':  # ZIP file magic number
+            # Not a zip file - probably a 404 page
+            zip_file.unlink()
+            raise Exception(f"No event file available for {year}")
+
     # Extract files
     print(f"  Extracting {year} files...")
     subprocess.run(
@@ -368,6 +377,12 @@ def process_year(year):
         return True
         
     except Exception as e:
+        error_msg = str(e)
+        # Check if this is a "no data available" error - skip gracefully
+        if "No event file available" in error_msg or "No event file found" in error_msg:
+            print(f"  Skipping {year}: No event data available (Retrosheet coverage starts ~1913)")
+            return True  # Skip successfully (not a failure)
+
         print(f"  ERROR processing {year}: {e}")
         # Cleanup incomplete data
         remove_year_from_db(year)
