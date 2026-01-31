@@ -30,7 +30,6 @@ venv/
 test_bos_only/
 
 # Historical processing script
-process_historical.py
 
 # Rust parser (separate repository)
 baseball.computer.rs/
