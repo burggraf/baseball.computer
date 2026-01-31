@@ -72,20 +72,8 @@ con.execute("""
     )
 """)
 
-# Create other event tables (empty placeholders)
-print("  Creating other event tables...")
-event_tables = [
-    "event_audit",
-    "event_baserunners",
-    "event_comments",
-    "event_fielding_play",
-    "event_flags",
-    "event_pitch_sequences",
-]
-
-for table in event_tables:
-    print(f"  Creating event.{table}...")
-    con.execute(f"CREATE TABLE event.{table} AS SELECT * FROM read_csv_auto('/dev/null')")
+# Other event tables will be created automatically during import
+print("  Skipping other event tables (will be created during import)...")
 
 # Create game tables
 print("  Creating game.game_lineup_appearances table...")
@@ -124,23 +112,52 @@ con.execute("""
 
 print("  Creating game.games table...")
 con.execute("""
-    CREATE TABLE game.games AS SELECT * FROM read_csv_auto('/dev/null')
+    CREATE TABLE game.games (
+        game_id VARCHAR,
+        date DATE,
+        start_time TIMESTAMP,
+        doubleheader_status VARCHAR,
+        time_of_day VARCHAR,
+        game_type VARCHAR,
+        bat_first_side VARCHAR,
+        sky VARCHAR,
+        field_condition VARCHAR,
+        precipitation VARCHAR,
+        wind_direction VARCHAR,
+        park_id VARCHAR,
+        temperature_fahrenheit BIGINT,
+        attendance BIGINT,
+        wind_speed_mph BIGINT,
+        use_dh BOOLEAN,
+        winning_pitcher VARCHAR,
+        losing_pitcher VARCHAR,
+        save_pitcher VARCHAR,
+        game_winning_rbi VARCHAR,
+        time_of_game_minutes BIGINT,
+        protest_info VARCHAR,
+        completion_info VARCHAR,
+        scorer VARCHAR,
+        scoring_method VARCHAR,
+        inputter VARCHAR,
+        translator VARCHAR,
+        date_inputted TIMESTAMP,
+        date_edited VARCHAR,
+        account_type VARCHAR,
+        filename VARCHAR,
+        game_key BIGINT,
+        away_team_id VARCHAR,
+        home_team_id VARCHAR,
+        umpire_home_id VARCHAR,
+        umpire_first_id VARCHAR,
+        umpire_second_id VARCHAR,
+        umpire_third_id VARCHAR,
+        umpire_left_id VARCHAR,
+        umpire_right_id VARCHAR
+    )
 """)
 
-# Create box_score tables (empty - for pre-1900 games with only box scores)
-print("  Creating box_score tables...")
-box_score_tables = [
-    "box_score_batting_lines", "box_score_caught_stealing", "box_score_comments",
-    "box_score_double_plays", "box_score_fielding_lines", "box_score_games",
-    "box_score_hit_by_pitches", "box_score_home_runs", "box_score_line_scores",
-    "box_score_pinch_hitting_lines", "box_score_pinch_running_lines",
-    "box_score_pitching_lines", "box_score_stolen_bases",
-    "box_score_team_batting_lines", "box_score_team_fielding_lines",
-    "box_score_team_miscellaneous_lines", "box_score_triple_plays",
-]
-
-for table in box_score_tables:
-    con.execute(f"CREATE TABLE box_score.{table} AS SELECT * FROM read_csv_auto('/dev/null')")
+# box_score tables will be created automatically during import (for pre-1900 games)
+print("  Skipping box_score tables (will be created during import)...")
 
 # Create dim (dimension) tables for players, teams, parks
 print("  Creating dim.teams...")

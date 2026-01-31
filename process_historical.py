@@ -51,8 +51,8 @@ def get_years_to_process():
     finally:
         con.close()
     
-    # Start from 2022 and go backwards
-    start_year = 2022
+    # Start from 2024 and go backwards
+    start_year = 2024
     end_year = 1900  # Retrosheet goes back to ~1900
     
     years_to_process = []
@@ -234,21 +234,39 @@ def import_year_to_db(year, parser_output_dir):
                 con.execute(f"DROP TABLE IF EXISTS {temp_table}")
                 con.execute(f"CREATE TABLE {temp_table} AS SELECT * FROM read_csv_auto('{table_file}')")
 
-                # Check if table has game_id column
+                # Check if target table exists
+                target_exists = con.execute(f"""
+                    SELECT COUNT(*) FROM information_schema.tables
+                    WHERE table_schema = '{schema}' AND table_name = '{table_name}'
+                """).fetchone()[0] > 0
+
+                # Check if temp table has game_id column
                 has_game_id = con.execute(f"""
                     SELECT COUNT(*) FROM information_schema.columns
                     WHERE table_name = '{temp_table}' AND column_name = 'game_id'
                 """).fetchone()[0] > 0
 
-                if has_game_id:
-                    con.execute(f"""
-                        INSERT INTO {schema}.{table_name}
-                        SELECT * FROM {temp_table}
-                        WHERE SUBSTRING(game_id, 4, 4) = '{year}'
-                    """)
+                if not target_exists:
+                    # Create the table from temp table data
+                    if has_game_id:
+                        con.execute(f"""
+                            CREATE TABLE {schema}.{table_name} AS
+                            SELECT * FROM {temp_table}
+                            WHERE SUBSTRING(game_id, 4, 4) = '{year}'
+                        """)
+                    else:
+                        con.execute(f"CREATE TABLE {schema}.{table_name} AS SELECT * FROM {temp_table}")
                 else:
-                    # Tables without game_id - import all (they link via event_id)
-                    con.execute(f"INSERT INTO {schema}.{table_name} SELECT * FROM {temp_table}")
+                    # Table exists, insert into it
+                    if has_game_id:
+                        con.execute(f"""
+                            INSERT INTO {schema}.{table_name}
+                            SELECT * FROM {temp_table}
+                            WHERE SUBSTRING(game_id, 4, 4) = '{year}'
+                        """)
+                    else:
+                        # Tables without game_id - import all (they link via event_id)
+                        con.execute(f"INSERT INTO {schema}.{table_name} SELECT * FROM {temp_table}")
 
                 con.execute(f"DROP TABLE {temp_table}")
     
