@@ -33,3 +33,4 @@ test_bos_only/
 
 # Rust parser (separate repository)
 baseball.computer.rs/
+*.duckdb.wal
