@@ -132,7 +132,7 @@ def parse_year(year):
     
     # Count events for this year
     con = duckdb.connect(":memory:")
-    con.execute(f"CREATE TABLE events AS SELECT * FROM read_csv_auto('{events_file}')")
+    con.execute(f"CREATE TABLE events AS SELECT * FROM read_csv_auto('{events_file}', ignore_errors=True)")
     count = con.execute("SELECT COUNT(*) FROM events").fetchone()[0]
     con.close()
     
@@ -155,7 +155,7 @@ def import_year_to_db(year, parser_output_dir):
         CREATE TEMP TABLE tmp_events AS
         SELECT *,
             CASE WHEN batting_side = 'bottom' THEN 'bottom' ELSE 'top' END as side
-        FROM read_csv_auto('{events_file}')
+        FROM read_csv_auto('{events_file}', ignore_errors=True)
         WHERE SUBSTRING(game_id, 4, 4) = '{year}'
     """)
 
@@ -205,7 +205,7 @@ def import_year_to_db(year, parser_output_dir):
                         entered_game_as,
                         CAST(start_event_id AS UTINYINT) as start_event_id,
                         CAST(end_event_id AS UTINYINT) as end_event_id
-                    FROM read_csv_auto('{table_file}')
+                    FROM read_csv_auto('{table_file}', ignore_errors=True)
                     WHERE SUBSTRING(game_id, 4, 4) = '{year}'
                 """)
             elif table_name == "game_fielding_appearances":
@@ -217,14 +217,14 @@ def import_year_to_db(year, parser_output_dir):
                         CAST(fielding_position AS UTINYINT) as fielding_position,
                         CAST(start_event_id AS UTINYINT) as start_event_id,
                         CAST(end_event_id AS UTINYINT) as end_event_id
-                    FROM read_csv_auto('{table_file}')
+                    FROM read_csv_auto('{table_file}', ignore_errors=True)
                     WHERE SUBSTRING(game_id, 4, 4) = '{year}'
                 """)
             elif table_name == "game_earned_runs":
                 con.execute(f"""
                     INSERT INTO {schema}.{table_name}
                     SELECT game_id, player_id, CAST(earned_runs AS UTINYINT)
-                    FROM read_csv_auto('{table_file}')
+                    FROM read_csv_auto('{table_file}', ignore_errors=True)
                     WHERE SUBSTRING(game_id, 4, 4) = '{year}'
                     GROUP BY game_id, player_id, earned_runs
                 """)
@@ -232,7 +232,7 @@ def import_year_to_db(year, parser_output_dir):
                 # Load to temp table first to avoid column resolution issues
                 temp_table = f"tmp_import_{table_name}"
                 con.execute(f"DROP TABLE IF EXISTS {temp_table}")
-                con.execute(f"CREATE TABLE {temp_table} AS SELECT * FROM read_csv_auto('{table_file}')")
+                con.execute(f"CREATE TABLE {temp_table} AS SELECT * FROM read_csv_auto('{table_file}', ignore_errors=True)")
 
                 # Check if target table exists
                 target_exists = con.execute(f"""
