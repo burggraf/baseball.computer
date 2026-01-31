@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
 """
 Add reference data (players, teams, parks) to the database.
-Imports roster files from Retrosheet and adds team/park mappings.
+Imports roster files from Retrosheet and downloads team/park reference data.
 """
 
 import duckdb
 from pathlib import Path
 import csv
-import sys
+import subprocess
+import tempfile
+import shutil
 
 DB_PATH = Path("/Users/markb/dev/baseball.computer/baseball.duckdb")
 RETROSHEET_DIR = Path("/Users/markb/dev/baseball.computer/retrosheet")
+RETROSHEET_URL = "https://www.retrosheet.org"
 
 print(f"Database: {DB_PATH}")
 print(f"Retrosheet dir: {RETROSHEET_DIR}")
@@ -40,51 +43,121 @@ con.execute("""
     )
 """)
 
-# Teams table (static mapping of team codes to names)
+# Teams table (will be populated from Retrosheet data)
 print("  Creating dim.teams...")
 con.execute("""
     CREATE TABLE IF NOT EXISTS dim.teams (
-        team_id VARCHAR PRIMARY KEY,
-        city VARCHAR,
-        name VARCHAR,
-        nickname VARCHAR,
+        team_id VARCHAR,
         league VARCHAR,
-        division VARCHAR
+        city VARCHAR,
+        nickname VARCHAR,
+        first_year INTEGER,
+        last_year INTEGER,
+        PRIMARY KEY (team_id, league)
     )
 """)
 
-# Parks table (static mapping of park codes to names)
+# Parks table (will be populated from Retrosheet data)
 print("  Creating dim.parks...")
 con.execute("""
     CREATE TABLE IF NOT EXISTS dim.parks (
         park_id VARCHAR PRIMARY KEY,
         name VARCHAR,
+        aka VARCHAR,
         city VARCHAR,
         state VARCHAR,
-        country VARCHAR
+        start_date VARCHAR,
+        end_date VARCHAR,
+        league VARCHAR,
+        notes VARCHAR
     )
 """)
 
 # ============================================================
-# IMPORT DATA
+# DOWNLOAD AND IMPORT REFERENCE DATA
 # ============================================================
 
-print("\nImporting data...")
+print("\nDownloading reference data from Retrosheet...")
 
-# Import roster files to build players table
-print("  Importing player data from roster files...")
+with tempfile.TemporaryDirectory() as temp_dir:
+    temp_path = Path(temp_dir)
+
+    # Download teams.csv
+    print("  Downloading teams.csv...")
+    teams_zip = temp_path / "teams.zip"
+    subprocess.run(
+        ["curl", "-s", "-o", str(teams_zip), f"{RETROSHEET_URL}/teams.zip"],
+        check=True
+    )
+    subprocess.run(
+        ["unzip", "-q", "-o", str(teams_zip), "-d", str(temp_path)],
+        check=True
+    )
+
+    # Download ballparks.csv
+    print("  Downloading ballparks.csv...")
+    parks_zip = temp_path / "ballparks.zip"
+    subprocess.run(
+        ["curl", "-s", "-o", str(parks_zip), f"{RETROSHEET_URL}/ballparks.zip"],
+        check=True
+    )
+    subprocess.run(
+        ["unzip", "-q", "-o", str(parks_zip), "-d", str(temp_path)],
+        check=True
+    )
+
+    # Import teams
+    print("\nImporting teams...")
+    teams_file = temp_path / "teams.csv"
+    with open(teams_file, 'r') as f:
+        reader = csv.reader(f)
+        next(reader)  # Skip header
+        team_count = 0
+        for row in reader:
+            if len(row) >= 6:
+                team_id, league, city, nickname, first_year, last_year = row[:6]
+                con.execute("""
+                    INSERT OR REPLACE INTO dim.teams (team_id, league, city, nickname, first_year, last_year)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, [team_id, league, city, nickname, int(first_year) if first_year else None,
+                      int(last_year) if last_year else None])
+                team_count += 1
+    print(f"  Imported {team_count:,} teams")
+
+    # Import parks
+    print("Importing parks...")
+    parks_file = temp_path / "ballparks.csv"
+    with open(parks_file, 'r') as f:
+        reader = csv.reader(f)
+        next(reader)  # Skip header
+        park_count = 0
+        for row in reader:
+            if len(row) >= 9:
+                park_id, name, aka, city, state, start, end, league, notes = row[:9]
+                con.execute("""
+                    INSERT OR REPLACE INTO dim.parks (park_id, name, aka, city, state, start_date, end_date, league, notes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, [park_id, name, aka, city, state, start, end, league, notes])
+                park_count += 1
+    print(f"  Imported {park_count:,} parks")
+
+# ============================================================
+# IMPORT PLAYER DATA FROM ROSTER FILES
+# ============================================================
+
+print("\nImporting player data from roster files...")
 roster_files = sorted(RETROSHEET_DIR.glob("*.ROS"))
 
 players_data = {}
 for roster_file in roster_files:
     team_id = roster_file.stem[:3]  # e.g., "BOS" from "BOS2024.ROS"
-    
+
     with open(roster_file, 'r') as f:
         reader = csv.reader(f)
         for row in reader:
             if len(row) >= 7:
                 player_id, last_name, first_name, bats, throws, team, pos = row[:7]
-                
+
                 if player_id not in players_data:
                     players_data[player_id] = {
                         'player_id': player_id,
@@ -94,104 +167,18 @@ for roster_file in roster_files:
                         'throws': throws,
                         'teams_played': []
                     }
-                
+
                 if team not in players_data[player_id]['teams_played']:
                     players_data[player_id]['teams_played'].append(team)
 
 # Insert players
-print(f"  Found {len(players_data)} unique players")
+print(f"  Found {len(players_data):,} unique players")
 for player_id, data in players_data.items():
     con.execute("""
         INSERT OR REPLACE INTO dim.players (player_id, last_name, first_name, bats, throws, teams_played)
         VALUES (?, ?, ?, ?, ?, ?)
     """, [data['player_id'], data['last_name'], data['first_name'],
           data['bats'], data['throws'], data['teams_played']])
-
-# Insert team data (MLB teams - static mapping)
-print("  Inserting team data...")
-teams = [
-    ('ANA', 'Los Angeles', 'Angels', 'Angels', 'AL', 'West'),
-    ('ARI', 'Arizona', 'Diamondbacks', 'D-backs', 'NL', 'West'),
-    ('ATL', 'Atlanta', 'Braves', 'Braves', 'NL', 'East'),
-    ('BAL', 'Baltimore', 'Orioles', 'Orioles', 'AL', 'East'),
-    ('BOS', 'Boston', 'Red Sox', 'Red Sox', 'AL', 'East'),
-    ('CHA', 'Chicago', 'White Sox', 'White Sox', 'AL', 'Central'),
-    ('CHN', 'Chicago', 'Cubs', 'Cubs', 'NL', 'Central'),
-    ('CIN', 'Cincinnati', 'Reds', 'Reds', 'NL', 'Central'),
-    ('CLE', 'Cleveland', 'Guardians', 'Guardians', 'AL', 'Central'),
-    ('COL', 'Colorado', 'Rockies', 'Rockies', 'NL', 'West'),
-    ('DET', 'Detroit', 'Tigers', 'Tigers', 'AL', 'Central'),
-    ('HOU', 'Houston', 'Astros', 'Astros', 'AL', 'West'),
-    ('KCA', 'Kansas City', 'Royals', 'Royals', 'AL', 'Central'),
-    ('LAN', 'Los Angeles', 'Dodgers', 'Dodgers', 'NL', 'West'),
-    ('MIA', 'Miami', 'Marlins', 'Marlins', 'NL', 'East'),
-    ('MIL', 'Milwaukee', 'Brewers', 'Brewers', 'NL', 'Central'),
-    ('MIN', 'Minnesota', 'Twins', 'Twins', 'AL', 'Central'),
-    ('NYA', 'New York', 'Yankees', 'Yankees', 'AL', 'East'),
-    ('NYN', 'New York', 'Mets', 'Mets', 'NL', 'East'),
-    ('OAK', 'Oakland', 'Athletics', 'Athletics', 'AL', 'West'),
-    ('PHI', 'Philadelphia', 'Phillies', 'Phillies', 'NL', 'East'),
-    ('PIT', 'Pittsburgh', 'Pirates', 'Pirates', 'NL', 'Central'),
-    ('SDN', 'San Diego', 'Padres', 'Padres', 'NL', 'West'),
-    ('SEA', 'Seattle', 'Mariners', 'Mariners', 'AL', 'West'),
-    ('SFN', 'San Francisco', 'Giants', 'Giants', 'NL', 'West'),
-    ('SLN', 'St. Louis', 'Cardinals', 'Cardinals', 'NL', 'Central'),
-    ('TBA', 'Tampa Bay', 'Rays', 'Rays', 'AL', 'East'),
-    ('TEX', 'Texas', 'Rangers', 'Rangers', 'AL', 'West'),
-    ('TOR', 'Toronto', 'Blue Jays', 'Blue Jays', 'AL', 'East'),
-    ('WAS', 'Washington', 'Nationals', 'Nationals', 'NL', 'East'),
-]
-
-for team_id, city, name, nickname, league, division in teams:
-    con.execute("""
-        INSERT OR REPLACE INTO dim.teams (team_id, city, name, nickname, league, division)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, [team_id, city, name, nickname, league, division])
-
-print(f"  Inserted {len(teams)} teams")
-
-# Insert park data (major league parks)
-print("  Inserting park data...")
-parks = [
-    ('ANA01', 'Angel Stadium', 'Anaheim', 'CA', 'USA'),
-    ('ARI01', 'Chase Field', 'Phoenix', 'AZ', 'USA'),
-    ('ATL02', 'Truist Park', 'Atlanta', 'GA', 'USA'),
-    ('BAL12', 'Oriole Park at Camden Yards', 'Baltimore', 'MD', 'USA'),
-    ('BOS02', 'Fenway Park', 'Boston', 'MA', 'USA'),
-    ('CHA08', 'Guaranteed Rate Field', 'Chicago', 'IL', 'USA'),
-    ('CHN02', 'Wrigley Field', 'Chicago', 'IL', 'USA'),
-    ('CIN02', 'Great American Ball Park', 'Cincinnati', 'OH', 'USA'),
-    ('CLE03', 'Progressive Field', 'Cleveland', 'OH', 'USA'),
-    ('COL02', 'Coors Field', 'Denver', 'CO', 'USA'),
-    ('DET02', 'Comerica Park', 'Detroit', 'MI', 'USA'),
-    ('HOU03', 'Minute Maid Park', 'Houston', 'TX', 'USA'),
-    ('KCA01', 'Kauffman Stadium', 'Kansas City', 'MO', 'USA'),
-    ('LAN02', 'Dodger Stadium', 'Los Angeles', 'CA', 'USA'),
-    ('MIA02', 'LoanDepot Park', 'Miami', 'FL', 'USA'),
-    ('MIL01', 'American Family Field', 'Milwaukee', 'WI', 'USA'),
-    ('MIN01', 'Target Field', 'Minneapolis', 'MN', 'USA'),
-    ('NYA31', 'Yankee Stadium', 'New York', 'NY', 'USA'),
-    ('NYN02', 'Citi Field', 'New York', 'NY', 'USA'),
-    ('OAK01', 'Oakland Coliseum', 'Oakland', 'CA', 'USA'),
-    ('PHI13', 'Citizens Bank Park', 'Philadelphia', 'PA', 'USA'),
-    ('PIT02', 'PNC Park', 'Pittsburgh', 'PA', 'USA'),
-    ('SDN02', 'Petco Park', 'San Diego', 'CA', 'USA'),
-    ('SEA02', 'T-Mobile Park', 'Seattle', 'WA', 'USA'),
-    ('SFN01', 'Oracle Park', 'San Francisco', 'CA', 'USA'),
-    ('SLN01', 'Busch Stadium', 'St. Louis', 'MO', 'USA'),
-    ('TBA02', 'Tropicana Field', 'Tampa Bay', 'FL', 'USA'),
-    ('TEX02', 'Globe Life Field', 'Arlington', 'TX', 'USA'),
-    ('TOR02', 'Rogers Centre', 'Toronto', 'ON', 'Canada'),
-    ('WAS11', 'Nationals Park', 'Washington', 'DC', 'USA'),
-]
-
-for park_id, name, city, state, country in parks:
-    con.execute("""
-        INSERT OR REPLACE INTO dim.parks (park_id, name, city, state, country)
-        VALUES (?, ?, ?, ?, ?)
-    """, [park_id, name, city, state, country])
-
-print(f"  Inserted {len(parks)} parks")
 
 # ============================================================
 # SHOW RESULTS
@@ -206,16 +193,20 @@ team_count = con.execute("SELECT COUNT(*) FROM dim.teams").fetchone()[0]
 park_count = con.execute("SELECT COUNT(*) FROM dim.parks").fetchone()[0]
 
 print(f"Players: {player_count:,}")
-print(f"Teams: {team_count}")
-print(f"Parks: {park_count}")
+print(f"Teams: {team_count:,}")
+print(f"Parks: {park_count:,}")
 
 print("\nSample players:")
 for row in con.execute("SELECT * FROM dim.players LIMIT 5").fetchall():
-    print(f"  {row[1]} {row[2]} ({row[0]}) - bats: {row[3]}, throws: {row[4]}")
+    print(f"  {row[2]} {row[1]} ({row[0]}) - bats: {row[3]}, throws: {row[4]}")
 
 print("\nSample teams:")
 for row in con.execute("SELECT * FROM dim.teams LIMIT 5").fetchall():
-    print(f"  {row[1]} {row[2]} ({row[0]}) - {row[4]} {row[5]}")
+    print(f"  {row[2]} {row[3]} ({row[0]}) - {row[1]} ({row[4]}-{row[5]})")
+
+print("\nSample parks:")
+for row in con.execute("SELECT * FROM dim.parks LIMIT 5").fetchall():
+    print(f"  {row[3]}: {row[1]} ({row[4]})")
 
 con.close()
 print("\nDone!")
