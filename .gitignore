@@ -1,3 +1,4 @@
+# Existing
 target/
 dbt_packages/
 logs/
@@ -10,3 +11,26 @@ profile.log
 .ipynb_checkpoints/
 docs/compiled/
 .worktrees/
+
+# Data files - all DuckDB databases
+baseball.duckdb
+*.duckdb
+
+# Retrosheet data directory (everything in it)
+retrosheet/
+
+# Parser output directories
+**/parser_output*/
+
+# Python venv
+venv/
+.venv/
+
+# Test data directories
+test_bos_only/
+
+# Historical processing script
+process_historical.py
+
+# Rust parser (separate repository)
+baseball.computer.rs/
