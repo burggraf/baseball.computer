@@ -24,6 +24,7 @@ con.execute("CREATE SCHEMA event")
 con.execute("CREATE SCHEMA game")
 con.execute("CREATE SCHEMA info")
 con.execute("CREATE SCHEMA box_score")
+con.execute("CREATE SCHEMA dim")
 
 # Create custom types
 print("  Creating custom types...")
@@ -86,21 +87,6 @@ for table in event_tables:
     print(f"  Creating event.{table}...")
     con.execute(f"CREATE TABLE event.{table} AS SELECT * FROM read_csv_auto('/dev/null')")
 
-# Create box_score tables (empty - for pre-1900 games with only box scores)
-print("  Creating box_score tables...")
-box_score_tables = [
-    "box_score_batting_lines", "box_score_caught_stealing", "box_score_comments",
-    "box_score_double_plays", "box_score_fielding_lines", "box_score_games",
-    "box_score_hit_by_pitches", "box_score_home_runs", "box_score_line_scores",
-    "box_score_pinch_hitting_lines", "box_score_pinch_running_lines",
-    "box_score_pitching_lines", "box_score_stolen_bases",
-    "box_score_team_batting_lines", "box_score_team_fielding_lines",
-    "box_score_team_miscellaneous_lines", "box_score_triple_plays",
-]
-
-for table in box_score_tables:
-    con.execute(f"CREATE TABLE box_score.{table} AS SELECT * FROM read_csv_auto('/dev/null')")
-
 # Create game tables
 print("  Creating game.game_lineup_appearances table...")
 con.execute("""
@@ -141,8 +127,61 @@ con.execute("""
     CREATE TABLE game.games AS SELECT * FROM read_csv_auto('/dev/null')
 """)
 
+# Create box_score tables (empty - for pre-1900 games with only box scores)
+print("  Creating box_score tables...")
+box_score_tables = [
+    "box_score_batting_lines", "box_score_caught_stealing", "box_score_comments",
+    "box_score_double_plays", "box_score_fielding_lines", "box_score_games",
+    "box_score_hit_by_pitches", "box_score_home_runs", "box_score_line_scores",
+    "box_score_pinch_hitting_lines", "box_score_pinch_running_lines",
+    "box_score_pitching_lines", "box_score_stolen_bases",
+    "box_score_team_batting_lines", "box_score_team_fielding_lines",
+    "box_score_team_miscellaneous_lines", "box_score_triple_plays",
+]
+
+for table in box_score_tables:
+    con.execute(f"CREATE TABLE box_score.{table} AS SELECT * FROM read_csv_auto('/dev/null')")
+
+# Create dim (dimension) tables for players, teams, parks
+print("  Creating dim.teams...")
+con.execute("""
+    CREATE TABLE dim.teams (
+        team_id VARCHAR PRIMARY KEY,
+        city VARCHAR,
+        name VARCHAR,
+        nickname VARCHAR,
+        league VARCHAR,
+        division VARCHAR
+    )
+""")
+
+print("  Creating dim.parks...")
+con.execute("""
+    CREATE TABLE dim.parks (
+        park_id VARCHAR PRIMARY KEY,
+        name VARCHAR,
+        city VARCHAR,
+        state VARCHAR,
+        country VARCHAR
+    )
+""")
+
+print("  Creating dim.players...")
+con.execute("""
+    CREATE TABLE dim.players (
+        player_id VARCHAR PRIMARY KEY,
+        last_name VARCHAR,
+        first_name VARCHAR,
+        bats VARCHAR,
+        throws VARCHAR,
+        teams_played VARCHAR[]
+    )
+""")
+
 con.close()
 
 print("\nDatabase created successfully!")
 print(f"Location: {DB_PATH}")
+print("\nTo add player, team, and park data:")
+print("  python3 add_reference_data.py")
 print("\nYou can now run: python3 process_historical.py")
