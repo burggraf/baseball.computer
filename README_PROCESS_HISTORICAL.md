@@ -4,6 +4,18 @@
 
 This script downloads and processes Retrosheet baseball data year by year, importing it into the DuckDB database. It processes years backwards from 2022, automatically skipping years that are already in the database.
 
+## First-Time Setup
+
+**On a fresh clone, you MUST create the database first:**
+
+```bash
+cd /Users/markb/dev/baseball.computer
+source venv/bin/activate
+python3 setup_database.py
+```
+
+This creates `baseball.duckdb` with the proper schema.
+
 ## How It Determines Where to Start
 
 The script **automatically detects which years to process** by:
@@ -24,7 +36,7 @@ For example:
 
 - Python 3.13+ with duckdb installed
 - Rust parser built and available at `baseball.computer.rs/target/release/baseball-computer`
-- DuckDB database at `baseball.duckdb`
+- DuckDB database created with `setup_database.py`
 
 ### Commands
 
@@ -58,6 +70,31 @@ Press `Ctrl+C` at any time to stop. The script will:
 4. **Exit cleanly**
 
 **No partial data is left in the database.**
+
+## Fresh Clone Instructions
+
+```bash
+# Clone the repository
+git clone git@github.com:burggraf/baseball.computer.git
+cd baseball.computer
+
+# Set up Python environment
+python3.13 -m venv venv
+source venv/bin/activate
+pip install duckdb
+
+# Clone and build the Rust parser
+git clone git@github.com:burggraf/baseball.computer.rs.git
+cd baseball.computer.rs
+cargo build --release
+cd ..
+
+# Create the database
+python3 setup_database.py
+
+# Run the import script
+python3 process_historical.py
+```
 
 ## Example Output
 
@@ -96,6 +133,10 @@ Processing Year: 2021
 
 ## Troubleshooting
 
+### "Table does not exist" error
+
+You forgot to run `setup_database.py` first. Run it and try again.
+
 ### Script fails with "Parser error"
 
 Check that the Rust parser is built:
@@ -115,6 +156,7 @@ The error will be displayed, and all data for that year is removed from the data
 ## File Locations
 
 - **Script**: `/Users/markb/dev/baseball.computer/process_historical.py`
+- **Setup script**: `/Users/markb/dev/baseball.computer/setup_database.py`
 - **Database**: `/Users/markb/dev/baseball.computer/baseball.duckdb`
 - **Retrosheet files**: `/Users/markb/dev/baseball.computer/retrosheet/`
 - **Parser**: `/Users/markb/dev/baseball.computer/baseball.computer.rs/target/release/baseball-computer`
