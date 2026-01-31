@@ -71,7 +71,8 @@ con.execute("""
     )
 """)
 
-# Create other event tables
+# Create other event tables (empty placeholders)
+print("  Creating other event tables...")
 event_tables = [
     "event_audit",
     "event_baserunners",
@@ -84,6 +85,21 @@ event_tables = [
 for table in event_tables:
     print(f"  Creating event.{table}...")
     con.execute(f"CREATE TABLE event.{table} AS SELECT * FROM read_csv_auto('/dev/null')")
+
+# Create box_score tables (empty - for pre-1900 games with only box scores)
+print("  Creating box_score tables...")
+box_score_tables = [
+    "box_score_batting_lines", "box_score_caught_stealing", "box_score_comments",
+    "box_score_double_plays", "box_score_fielding_lines", "box_score_games",
+    "box_score_hit_by_pitches", "box_score_home_runs", "box_score_line_scores",
+    "box_score_pinch_hitting_lines", "box_score_pinch_running_lines",
+    "box_score_pitching_lines", "box_score_stolen_bases",
+    "box_score_team_batting_lines", "box_score_team_fielding_lines",
+    "box_score_team_miscellaneous_lines", "box_score_triple_plays",
+]
+
+for table in box_score_tables:
+    con.execute(f"CREATE TABLE box_score.{table} AS SELECT * FROM read_csv_auto('/dev/null')")
 
 # Create game tables
 print("  Creating game.game_lineup_appearances table...")
