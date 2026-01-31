@@ -102,9 +102,9 @@ for roster_file in roster_files:
 print(f"  Found {len(players_data)} unique players")
 for player_id, data in players_data.items():
     con.execute("""
-        INSERT INTO dim.players (player_id, last_name, first_name, bats, throws, teams_played)
+        INSERT OR REPLACE INTO dim.players (player_id, last_name, first_name, bats, throws, teams_played)
         VALUES (?, ?, ?, ?, ?, ?)
-    """, [data['player_id'], data['last_name'], data['first_name'], 
+    """, [data['player_id'], data['last_name'], data['first_name'],
           data['bats'], data['throws'], data['teams_played']])
 
 # Insert team data (MLB teams - static mapping)
@@ -144,7 +144,7 @@ teams = [
 
 for team_id, city, name, nickname, league, division in teams:
     con.execute("""
-        INSERT INTO dim.teams (team_id, city, name, nickname, league, division)
+        INSERT OR REPLACE INTO dim.teams (team_id, city, name, nickname, league, division)
         VALUES (?, ?, ?, ?, ?, ?)
     """, [team_id, city, name, nickname, league, division])
 
@@ -187,7 +187,7 @@ parks = [
 
 for park_id, name, city, state, country in parks:
     con.execute("""
-        INSERT INTO dim.parks (park_id, name, city, state, country)
+        INSERT OR REPLACE INTO dim.parks (park_id, name, city, state, country)
         VALUES (?, ?, ?, ?, ?)
     """, [park_id, name, city, state, country])
 

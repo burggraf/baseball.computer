@@ -284,13 +284,10 @@ def import_year_to_db(year, parser_output_dir):
 def cleanup_year_files(year):
     """Remove downloaded files for a year (after successful import)"""
     print(f"  Cleaning up {year} source files...")
-    
-    # Remove event and roster files for this year
+
+    # Remove only event files - keep ROS files for player reference data
     for ev_file in RETROSHEET_DIR.glob(f"{year}*.EV?"):
         ev_file.unlink()
-    
-    for ros_file in RETROSHEET_DIR.glob(f"*{year}.ROS"):
-        ros_file.unlink()
 
 def remove_year_from_db(year):
     """Remove a year's data from the database (for cleanup on failure)"""
