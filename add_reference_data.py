@@ -43,35 +43,9 @@ con.execute("""
     )
 """)
 
-# Teams table (will be populated from Retrosheet data)
-print("  Creating dim.teams...")
-con.execute("""
-    CREATE TABLE IF NOT EXISTS dim.teams (
-        team_id VARCHAR,
-        league VARCHAR,
-        city VARCHAR,
-        nickname VARCHAR,
-        first_year INTEGER,
-        last_year INTEGER,
-        PRIMARY KEY (team_id, league)
-    )
-""")
-
-# Parks table (will be populated from Retrosheet data)
-print("  Creating dim.parks...")
-con.execute("""
-    CREATE TABLE IF NOT EXISTS dim.parks (
-        park_id VARCHAR PRIMARY KEY,
-        name VARCHAR,
-        aka VARCHAR,
-        city VARCHAR,
-        state VARCHAR,
-        start_date VARCHAR,
-        end_date VARCHAR,
-        league VARCHAR,
-        notes VARCHAR
-    )
-""")
+# Teams table - already created by setup_database.py
+# Parks table - already created by setup_database.py
+# Skipping table creation since setup_database.py handles this
 
 # ============================================================
 # DOWNLOAD AND IMPORT REFERENCE DATA
@@ -116,11 +90,12 @@ with tempfile.TemporaryDirectory() as temp_dir:
         for row in reader:
             if len(row) >= 6:
                 team_id, league, city, nickname, first_year, last_year = row[:6]
+                # Map to the schema: team_id, city, name, nickname, league, division
+                # Using city as name, nickname stays as is, league as is
                 con.execute("""
-                    INSERT OR REPLACE INTO dim.teams (team_id, league, city, nickname, first_year, last_year)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                """, [team_id, league, city, nickname, int(first_year) if first_year else None,
-                      int(last_year) if last_year else None])
+                    INSERT OR REPLACE INTO dim.teams (team_id, city, name, nickname, league)
+                    VALUES (?, ?, ?, ?, ?)
+                """, [team_id, city, city, nickname, league])
                 team_count += 1
     print(f"  Imported {team_count:,} teams")
 
@@ -134,10 +109,11 @@ with tempfile.TemporaryDirectory() as temp_dir:
         for row in reader:
             if len(row) >= 9:
                 park_id, name, aka, city, state, start, end, league, notes = row[:9]
+                # Map to schema: park_id, name, city, state, country
                 con.execute("""
-                    INSERT OR REPLACE INTO dim.parks (park_id, name, aka, city, state, start_date, end_date, league, notes)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, [park_id, name, aka, city, state, start, end, league, notes])
+                    INSERT OR REPLACE INTO dim.parks (park_id, name, city, state)
+                    VALUES (?, ?, ?, ?)
+                """, [park_id, name, city, state])
                 park_count += 1
     print(f"  Imported {park_count:,} parks")
 
