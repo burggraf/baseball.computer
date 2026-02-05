@@ -181,6 +181,43 @@ def import_historical_data(years=None):
     except Exception as e:
         print_warning(f"Could not verify event data: {e}")
 
+    # Verify critical tables exist
+    try:
+        import duckdb
+        con = duckdb.connect(str(DB_PATH), read_only=False)
+
+        # Critical tables required for advanced analytics
+        critical_tables = [
+            ('event', 'events'),
+            ('event', 'event_baserunners'),
+            ('event', 'event_pitch_sequences'),
+        ]
+
+        missing_tables = []
+        for schema, table in critical_tables:
+            result = con.execute(f"""
+                SELECT COUNT(*) FROM information_schema.tables
+                WHERE table_schema = '{schema}' AND table_name = '{table}'
+            """).fetchone()[0]
+            if result == 0:
+                missing_tables.append(f'{schema}.{table}')
+
+        con.close()
+
+        if missing_tables:
+            print_error(f"Critical tables missing after import: {', '.join(missing_tables)}")
+            print("\n  This usually means the Rust parser failed to create CSV files.")
+            print("  Check that:")
+            print("  1. The Rust parser was built: cd baseball.computer.rs && cargo build --release")
+            print("  2. Retrosheet event files exist in the retrosheet/ directory")
+            print("  3. The parser ran successfully (check process_historical.py output)")
+            return False
+
+        print_success("All critical tables verified")
+
+    except Exception as e:
+        print_warning(f"Could not verify critical tables: {e}")
+
     return True
 
 def build_defensive_stats():
