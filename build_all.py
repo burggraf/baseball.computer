@@ -376,6 +376,20 @@ def main():
         print_error("DuckDB module not found. Install with: pip install duckdb")
         return 1
 
+    # Check for Rust parser
+    parser_binary = BASE_DIR / "baseball.computer.rs" / "target" / "release" / "baseball-computer"
+    if not parser_binary.exists():
+        print_error("Rust parser binary not found!")
+        print("\n  The Rust parser is required for importing Retrosheet data.")
+        print("  Please clone and build it:")
+        print()
+        print("    git clone https://github.com/droher/baseball.computer.rs.git")
+        print("    cd baseball.computer.rs")
+        print("    cargo build --release")
+        print()
+        return 1
+    print_success("Rust parser binary found")
+
     # Parse command line args for specific years
     years = None
     if len(sys.argv) > 1:
