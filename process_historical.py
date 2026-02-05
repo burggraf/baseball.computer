@@ -13,8 +13,8 @@ import shutil
 from pathlib import Path
 import duckdb
 
-# Configuration
-BASE_DIR = Path("/Users/markb/dev/baseball.computer")
+# Configuration - use script directory for portability
+BASE_DIR = Path(__file__).parent.resolve()
 RETROSHEET_DIR = BASE_DIR / "retrosheet"
 PARSER_DIR = BASE_DIR / "baseball.computer.rs"
 DB_PATH = BASE_DIR / "baseball.duckdb"

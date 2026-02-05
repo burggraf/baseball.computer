@@ -11,8 +11,10 @@ import subprocess
 import tempfile
 import shutil
 
-DB_PATH = Path("/Users/markb/dev/baseball.computer/baseball.duckdb")
-RETROSHEET_DIR = Path("/Users/markb/dev/baseball.computer/retrosheet")
+# Use script directory for portability
+BASE_DIR = Path(__file__).parent.resolve()
+DB_PATH = BASE_DIR / "baseball.duckdb"
+RETROSHEET_DIR = BASE_DIR / "retrosheet"
 RETROSHEET_URL = "https://www.retrosheet.org"
 
 print(f"Database: {DB_PATH}")

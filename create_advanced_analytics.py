@@ -7,7 +7,9 @@ Bypasses dbt to work with our imported data structure.
 import duckdb
 from pathlib import Path
 
-DB_PATH = Path("/Users/markb/dev/baseball.computer/baseball.duckdb")
+# Use script directory for portability
+BASE_DIR = Path(__file__).parent.resolve()
+DB_PATH = BASE_DIR / "baseball.duckdb"
 
 con = duckdb.connect(str(DB_PATH), read_only=False)
 
@@ -27,10 +29,10 @@ con.execute("""
     WITH event_stats AS (
         SELECT
             SUBSTRING(e.game_id, 4, 4)::INT AS season,
-            g.away_team_id AS team_id,
+            e.batting_team_id AS team_id,
             e.batter_id AS player_id,
             COUNT(*) AS plate_appearances,
-            SUM(CASE WHEN e.plate_appearance_result IN ('Single', 'Double', 'Triple', 'HomeRun', 'InsideTheParkHomeRun', 'GroundRuleDouble', 'InPlayOut', 'FieldersChoice', 'ReachedOnError') THEN 1 ELSE 0 END) AS at_bats,
+            SUM(CASE WHEN e.plate_appearance_result IN ('Single', 'Double', 'Triple', 'HomeRun', 'InsideTheParkHomeRun', 'GroundRuleDouble', 'InPlayOut', 'StrikeOut', 'FieldersChoice', 'ReachedOnError') THEN 1 ELSE 0 END) AS at_bats,
             SUM(CASE WHEN e.plate_appearance_result IN ('Single', 'Double', 'Triple', 'HomeRun', 'InsideTheParkHomeRun', 'GroundRuleDouble') THEN 1 ELSE 0 END) AS hits,
             SUM(CASE WHEN e.plate_appearance_result = 'Double' THEN 1 ELSE 0 END) AS doubles,
             SUM(CASE WHEN e.plate_appearance_result = 'Triple' THEN 1 ELSE 0 END) AS triples,
@@ -101,7 +103,7 @@ con.execute("""
     WITH event_stats AS (
         SELECT
             SUBSTRING(e.game_id, 4, 4)::INT AS season,
-            g.home_team_id AS team_id,
+            e.fielding_team_id AS team_id,
             e.pitcher_id AS player_id,
             COUNT(*) AS batters_faced,
             SUM(CASE WHEN e.plate_appearance_result NOT IN ('SacrificeHit', 'SacrificeFly', 'IntentionalWalk', 'HitByPitch', 'Interference') THEN 1 ELSE 0 END) AS at_bats_against,

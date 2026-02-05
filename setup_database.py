@@ -7,7 +7,9 @@ Run this once on a fresh clone before running process_historical.py
 import duckdb
 from pathlib import Path
 
-DB_PATH = Path("/Users/markb/dev/baseball.computer/baseball.duckdb")
+# Use script directory for portability
+BASE_DIR = Path(__file__).parent.resolve()
+DB_PATH = BASE_DIR / "baseball.duckdb"
 
 print(f"Creating database at: {DB_PATH}")
 

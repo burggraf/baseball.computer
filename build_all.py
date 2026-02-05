@@ -33,7 +33,8 @@ from datetime import datetime
 # CONFIGURATION
 # ============================================================
 
-BASE_DIR = Path("/Users/markb/dev/baseball.computer")
+# Use script directory as BASE_DIR for portability across machines
+BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "baseball.duckdb"
 RETROSHEET_DIR = BASE_DIR / "retrosheet"
 BC_DIR = BASE_DIR / "bc"
@@ -263,6 +264,30 @@ def build_dbt_models():
             print(f"    Error: {result.stderr[-500:]}")
         return False
 
+def add_lahman_validation():
+    """Step 6: Import Lahman Baseball Database as validation tables."""
+    print_header("STEP 6: Importing Lahman Validation Data")
+
+    lahman_script = BASE_DIR / "add_lahman_validation_data.py"
+
+    # Check if Lahman CSV directory exists
+    lahman_dir = BASE_DIR / "lahman_1871-2025_csv"
+    if not lahman_dir.exists():
+        print_warning(f"Lahman CSV directory not found: {lahman_dir}")
+        print("  Skipping Lahman validation data import.")
+        print("  To enable: Download Lahman database from SABR and extract to lahman_1871-2025_csv/")
+        return True  # Not a failure - optional step
+
+    if not lahman_script.exists():
+        print_warning(f"Lahman import script not found: {lahman_script}")
+        return True  # Not a failure - optional step
+
+    if not run_script(lahman_script, "Importing Lahman validation data"):
+        return False
+
+    print_success("Lahman validation data imported to 'validation' schema")
+    return True
+
 def verify_database():
     """Final verification step."""
     print_header("FINAL VERIFICATION")
@@ -294,6 +319,11 @@ def verify_database():
             (None, 'event_baserunning_stats'),
             (None, 'calc_batted_ball_type'),
             (None, 'event_batted_ball_stats'),
+            # validation tables
+            ('validation', 'lahman_people'),
+            ('validation', 'lahman_batting'),
+            ('validation', 'lahman_pitching'),
+            ('validation', 'lahman_teams'),
         ]
 
         for schema, table in key_tables:
@@ -362,6 +392,7 @@ def main():
         ("Historical Data", lambda: import_historical_data(years)),
         ("Defensive Stats", build_defensive_stats),
         ("Advanced Analytics", build_dbt_models),
+        ("Lahman Validation Data", add_lahman_validation),
         ("Verification", verify_database),
     ]
 
@@ -409,6 +440,16 @@ def main():
         print("    SELECT * FROM defensive_stats")
         print("    WHERE player_id = 'judga001'")
         print("    ORDER BY season, fielding_position;")
+        print()
+        print("    -- Validate our metrics against Lahman data")
+        print("    SELECT o.season, o.player_id, p.first_name, p.last_name,")
+        print("           o.batting_average AS our_ba, l.batting_average AS lahman_ba")
+        print("    FROM metrics_player_season_league_offense o")
+        print("    JOIN validation.lahman_batting_season_agg l")
+        print("      ON o.player_id = l.player_id AND o.season = l.season")
+        print("    JOIN dim.players p ON o.player_id = p.player_id")
+        print("    WHERE o.season = 2023 AND o.at_bats >= 400")
+        print("    ORDER BY o.ops DESC LIMIT 10;")
         return 0
     else:
         print_error(f"Build failed at step(s): {', '.join(failed_steps)}")
